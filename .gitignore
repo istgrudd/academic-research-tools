@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Environments and secrets
+.venv/
+.env
+.env.*
+!.env.example
+
+# Build
+build/
+dist/
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+
+# Local Hermes/runtime state
+.hermes/
