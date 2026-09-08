@@ -6,6 +6,7 @@ import asyncio
 import json
 import os
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -50,12 +51,22 @@ def _configured(name: str) -> bool:
     return bool(os.environ.get(name, "").strip())
 
 
+def _run_async(method: Callable[..., Any], args: dict[str, Any]) -> Any:
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(method(**args))
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        return executor.submit(asyncio.run, method(**args)).result()
+
+
 def _handler(method_name: str) -> Callable[..., str]:
     def handle(args: dict[str, Any], **kwargs: Any) -> str:
         del kwargs
         try:
             method = getattr(ResearchTools(), method_name)
-            result = asyncio.run(method(**dict(args or {})))
+            result = _run_async(method, dict(args or {}))
         except Exception as exc:  # Hermes handlers must return structured failures
             result = {
                 "success": False,

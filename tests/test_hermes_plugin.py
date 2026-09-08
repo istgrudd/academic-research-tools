@@ -1,3 +1,4 @@
+import asyncio
 import json
 
 from academic_research.hermes_plugin import register
@@ -52,3 +53,19 @@ def test_hermes_status_handler_returns_json_without_secret(monkeypatch):
     assert payload["success"] is True
     assert payload["providers"]["scopus"]["available"] is True
     assert "never-print-this-key" not in json.dumps(payload)
+
+
+def test_hermes_sync_handler_is_safe_inside_running_event_loop():
+    context = FakeContext()
+    register(context)
+    status_handler = next(
+        tool["handler"]
+        for tool in context.tools
+        if tool["name"] == "research_provider_status"
+    )
+
+    async def invoke_from_async_host():
+        return status_handler({})
+
+    payload = json.loads(asyncio.run(invoke_from_async_host()))
+    assert payload["success"] is True
