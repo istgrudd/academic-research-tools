@@ -6,6 +6,7 @@ ROOT = Path(__file__).parents[1]
 def test_public_repository_files_are_complete():
     required = [
         "LICENSE",
+        "MANIFEST.in",
         "README.md",
         "CONTRIBUTING.md",
         "SECURITY.md",
