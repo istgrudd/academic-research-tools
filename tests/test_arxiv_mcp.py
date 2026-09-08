@@ -106,7 +106,10 @@ def test_mcp_server_registers_and_calls_arxiv_tool():
             tools=ResearchTools(arxiv=ArxivProvider(transport=FakeTransport()))
         )
         registered = await server.list_tools()
-        assert {tool.name for tool in registered} == {"search_arxiv"}
+        assert {tool.name for tool in registered} == {
+            "research_provider_status",
+            "search_arxiv",
+        }
 
         response = await server.call_tool(
             "search_arxiv", {"query": "all:research", "limit": 1}

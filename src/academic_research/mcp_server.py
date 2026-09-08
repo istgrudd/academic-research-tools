@@ -6,6 +6,7 @@ import asyncio
 from typing import Any
 
 from .providers.arxiv import ArxivAPIError, ArxivProvider
+from .status import provider_status
 
 
 class ResearchTools:
@@ -13,6 +14,10 @@ class ResearchTools:
 
     def __init__(self, *, arxiv: ArxivProvider | None = None):
         self.arxiv = arxiv or ArxivProvider()
+
+    async def provider_status(self) -> dict[str, Any]:
+        """Report configured providers without exposing secret values."""
+        return {"success": True, "providers": provider_status()}
 
     async def search_arxiv(
         self,
@@ -59,6 +64,11 @@ def create_server(*, tools: ResearchTools | None = None):
             "Search scholarly sources and preserve source provenance. "
             "Do not treat citation count as evidence of relevance or quality."
         ),
+    )
+    server.add_tool(
+        facade.provider_status,
+        name="research_provider_status",
+        description="Report academic provider availability without exposing credentials.",
     )
     server.add_tool(
         facade.search_arxiv,
