@@ -3,6 +3,7 @@
 - Source: `/home/ubuntu/.hermes/plugins/scopus_research`
 - Imported: 2026-09-08
 - Purpose: preserve the working Hermes plugin before extracting a harness-neutral package.
+- Baseline remains available in the repository's first commit and is intentionally removed from the release tree after migration, avoiding duplicate implementations.
 - Baseline command: `cd scopus_research && python3 -m unittest discover -s tests -v`
 - Result: 15 tests passed.
 - Compilation command: `python3 -m compileall -q .`

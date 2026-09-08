@@ -34,7 +34,11 @@ dev = [
 ]
 
 [project.scripts]
+academic-research = "academic_research.cli:main"
 academic-research-mcp = "academic_research.mcp_server:main"
+
+[project.entry-points."hermes_agent.plugins"]
+academic-research = "academic_research.hermes_plugin:register"
 
 [project.urls]
 Homepage = "https://github.com/OWNER/academic-research-tools"
@@ -46,6 +50,9 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+academic_research = ["skills/*/SKILL.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

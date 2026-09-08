@@ -1,0 +1,14 @@
+name: academic-research
+version: 0.1.0
+description: Evidence-grounded academic literature discovery across arXiv, Semantic Scholar, Scopus, and optional Google Scholar.
+author: Rudi Firdaus
+kind: standalone
+provides_tools:
+  - research_provider_status
+  - search_papers
+  - search_arxiv
+  - search_semantic_scholar
+  - search_scopus
+  - get_scopus_abstract
+  - search_scopus_authors
+  - search_google_scholar
