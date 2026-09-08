@@ -85,3 +85,33 @@ class SearchResult:
             "metadata": dict(self.metadata),
             "results": [paper.to_dict() for paper in self.papers],
         }
+
+
+@dataclass(slots=True)
+class UnifiedSearchResult:
+    """Auditable result of a best-effort search across multiple providers."""
+
+    query: str
+    sources_requested: list[str]
+    sources_succeeded: list[str]
+    sources_failed: list[str]
+    retrieved_count: int
+    deduplicated_count: int
+    papers: list[Paper]
+    provider_totals: dict[str, int] = field(default_factory=dict)
+    errors: dict[str, str] = field(default_factory=dict)
+    warnings: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "query": self.query,
+            "sources_requested": list(self.sources_requested),
+            "sources_succeeded": list(self.sources_succeeded),
+            "sources_failed": list(self.sources_failed),
+            "retrieved_count": self.retrieved_count,
+            "deduplicated_count": self.deduplicated_count,
+            "provider_totals": dict(self.provider_totals),
+            "errors": dict(self.errors),
+            "warnings": list(self.warnings),
+            "results": [paper.to_dict() for paper in self.papers],
+        }

@@ -14,6 +14,7 @@ from .providers.semantic_scholar import (
     SemanticScholarProvider,
 )
 from .providers.serpapi_scholar import SerpAPIError, SerpAPIScholarProvider
+from .service import ResearchService
 from .status import provider_status
 
 _PROVIDER_ERRORS = (
@@ -36,6 +37,7 @@ class ResearchTools:
         semantic_scholar: SemanticScholarProvider | None = None,
         scopus: ScopusProvider | None = None,
         google_scholar: SerpAPIScholarProvider | None = None,
+        service: ResearchService | None = None,
     ):
         self.arxiv = arxiv or ArxivProvider()
         self.semantic_scholar = semantic_scholar or SemanticScholarProvider(
@@ -53,6 +55,18 @@ class ResearchTools:
         serpapi_key = os.environ.get("SERPAPI_API_KEY", "").strip()
         self.google_scholar = google_scholar or (
             SerpAPIScholarProvider(serpapi_key) if serpapi_key else None
+        )
+        self.service = service or ResearchService(
+            providers={
+                name: provider
+                for name, provider in {
+                    "arxiv": self.arxiv,
+                    "semantic_scholar": self.semantic_scholar,
+                    "scopus": self.scopus,
+                    "google_scholar": self.google_scholar,
+                }.items()
+                if provider is not None
+            }
         )
 
     async def _run(self, operation: Callable[[], Any]) -> dict[str, Any]:
@@ -78,6 +92,23 @@ class ResearchTools:
     async def provider_status(self) -> dict[str, Any]:
         """Report configured providers without exposing secret values."""
         return {"success": True, "providers": provider_status()}
+
+    async def search_papers(
+        self,
+        query: str,
+        sources: list[str] | None = None,
+        limit_per_source: int = 10,
+        year: str | int | None = None,
+    ) -> dict[str, Any]:
+        """Search multiple scholarly providers and deduplicate the results."""
+        return await self._run(
+            lambda: self.service.search(
+                query,
+                sources=sources,
+                limit_per_source=limit_per_source,
+                year=year,
+            )
+        )
 
     async def search_arxiv(
         self,
@@ -234,6 +265,11 @@ def create_server(*, tools: ResearchTools | None = None):
             facade.provider_status,
             "research_provider_status",
             "Report provider availability without exposing credentials.",
+        ),
+        (
+            facade.search_papers,
+            "search_papers",
+            "Search available scholarly providers with provenance-aware deduplication.",
         ),
         (
             facade.search_arxiv,

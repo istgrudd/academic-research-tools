@@ -56,6 +56,7 @@ def test_server_registers_all_public_academic_tools(monkeypatch):
         names = {tool.name for tool in await create_server().list_tools()}
         assert names == {
             "research_provider_status",
+            "search_papers",
             "search_arxiv",
             "search_semantic_scholar",
             "search_scopus",
