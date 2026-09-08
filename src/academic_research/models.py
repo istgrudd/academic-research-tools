@@ -3,7 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
 from typing import Any
+
+
+def utc_now_iso() -> str:
+    """Return an RFC 3339 UTC timestamp for retrieval provenance."""
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 @dataclass(slots=True)
@@ -52,6 +58,7 @@ class SearchResult:
     source: str
     query: str | None
     papers: list[Paper]
+    provider: str | None = None
     total: int = 0
     offset: int = 0
     limit: int = 0
@@ -59,11 +66,13 @@ class SearchResult:
     authenticated: bool | None = None
     attribution: str | None = None
     warnings: list[str] = field(default_factory=list)
+    quota: dict[str, Any] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "source": self.source,
+            "provider": self.provider,
             "query": self.query,
             "total_results": self.total,
             "offset": self.offset,
@@ -72,6 +81,7 @@ class SearchResult:
             "authenticated": self.authenticated,
             "attribution": self.attribution,
             "warnings": list(self.warnings),
+            "quota": dict(self.quota),
             "metadata": dict(self.metadata),
             "results": [paper.to_dict() for paper in self.papers],
         }
