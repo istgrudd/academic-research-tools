@@ -1,6 +1,6 @@
 # Claude Desktop integration
 
-Install Academic Research Tools in a stable virtual environment or use `uvx` after the PyPI release.
+Install Academic Research Tools in a stable virtual environment or launch it from PyPI with `uvx`.
 
 Add a server entry to Claude Desktop's MCP configuration. The exact config file location can change by operating system and Claude Desktop version; consult Anthropic's current MCP documentation if the app does not expose the server.
 
@@ -22,7 +22,7 @@ Add a server entry to Claude Desktop's MCP configuration. The exact config file 
 
 For a source checkout, replace `command` with the absolute path to `.venv/bin/academic-research` and set `args` to `["serve"]`.
 
-Optional credentials can be placed in the server's `env` object if the local config is private:
+The simplest local credential path is `academic-research configure`; the MCP process reads the protected user configuration. Optional credentials can instead be placed in the server's `env` object if the desktop configuration is private:
 
 ```json
 {

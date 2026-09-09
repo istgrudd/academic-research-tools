@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-import os
 from collections.abc import Callable
+from functools import wraps
 from typing import Any
 
+from .credentials import CredentialConfigError, CredentialResolver
 from .providers.arxiv import ArxivAPIError, ArxivProvider
 from .providers.scopus import ElsevierAPIError, ScopusProvider
 from .providers.semantic_scholar import (
@@ -26,6 +27,32 @@ _PROVIDER_ERRORS = (
     TypeError,
 )
 
+_CONFIGURE_COMMANDS = {
+    "scopus": "academic-research configure --provider scopus",
+    "google_scholar": "academic-research configure --provider google-scholar",
+}
+_KNOWN_PROVIDERS = frozenset(
+    {"arxiv", "semantic_scholar", "scopus", "google_scholar"}
+)
+
+
+def _credential_safe(method: Callable[..., Any]) -> Callable[..., Any]:
+    """Return a secret-safe payload when credential configuration is invalid."""
+
+    @wraps(method)
+    async def wrapped(self, *args, **kwargs):
+        try:
+            return await method(self, *args, **kwargs)
+        except CredentialConfigError:
+            return {
+                "success": False,
+                "error": "Credential configuration is invalid; run the doctor command locally",
+                "requires_user_action": True,
+                "doctor_command": "academic-research doctor",
+            }
+
+    return wrapped
+
 
 class ResearchTools:
     """Async facade that keeps blocking provider clients off the event loop."""
@@ -38,36 +65,51 @@ class ResearchTools:
         scopus: ScopusProvider | None = None,
         google_scholar: SerpAPIScholarProvider | None = None,
         service: ResearchService | None = None,
+        resolver: CredentialResolver | None = None,
     ):
+        self.credentials = resolver or CredentialResolver()
         self.arxiv = arxiv or ArxivProvider()
-        self.semantic_scholar = semantic_scholar or SemanticScholarProvider(
-            os.environ.get("SEMANTIC_SCHOLAR_API_KEY")
+        self._semantic_scholar = semantic_scholar
+        self._scopus = scopus
+        self._google_scholar = google_scholar
+        self.service = service
+
+    def _semantic_provider(self) -> SemanticScholarProvider:
+        return self._semantic_scholar or SemanticScholarProvider(
+            self.credentials.get("SEMANTIC_SCHOLAR_API_KEY")
         )
-        elsevier_key = os.environ.get("ELSEVIER_API_KEY", "").strip()
-        self.scopus = scopus or (
-            ScopusProvider(
-                elsevier_key,
-                inst_token=os.environ.get("ELSEVIER_INST_TOKEN"),
-            )
-            if elsevier_key
-            else None
+
+    def _scopus_provider(self) -> ScopusProvider | None:
+        if self._scopus is not None:
+            return self._scopus
+        api_key = self.credentials.get("ELSEVIER_API_KEY")
+        if not api_key:
+            return None
+        return ScopusProvider(
+            api_key,
+            inst_token=self.credentials.get("ELSEVIER_INST_TOKEN"),
         )
-        serpapi_key = os.environ.get("SERPAPI_API_KEY", "").strip()
-        self.google_scholar = google_scholar or (
-            SerpAPIScholarProvider(serpapi_key) if serpapi_key else None
-        )
-        self.service = service or ResearchService(
-            providers={
-                name: provider
-                for name, provider in {
-                    "arxiv": self.arxiv,
-                    "semantic_scholar": self.semantic_scholar,
-                    "scopus": self.scopus,
-                    "google_scholar": self.google_scholar,
-                }.items()
-                if provider is not None
-            }
-        )
+
+    def _google_provider(self) -> SerpAPIScholarProvider | None:
+        if self._google_scholar is not None:
+            return self._google_scholar
+        api_key = self.credentials.get("SERPAPI_API_KEY")
+        return SerpAPIScholarProvider(api_key) if api_key else None
+
+    def _research_service(self) -> ResearchService:
+        if self.service is not None:
+            return self.service
+        providers: dict[str, Any] = {
+            "arxiv": self.arxiv,
+            "semantic_scholar": self._semantic_provider(),
+        }
+        scopus = self._scopus_provider()
+        scholar = self._google_provider()
+        if scopus is not None:
+            providers["scopus"] = scopus
+        if scholar is not None:
+            providers["google_scholar"] = scholar
+        return ResearchService(providers=providers, redact=self.credentials.redact)
 
     async def _run(self, operation: Callable[[], Any]) -> dict[str, Any]:
         try:
@@ -75,7 +117,7 @@ class ResearchTools:
             payload = result.to_dict() if hasattr(result, "to_dict") else result
             return {"success": True, **payload}
         except _PROVIDER_ERRORS as exc:
-            error = {"success": False, "error": str(exc)}
+            error = {"success": False, "error": self.credentials.redact(str(exc))}
             status_code = getattr(exc, "status_code", None)
             quota = getattr(exc, "quota", None)
             if status_code is not None:
@@ -86,13 +128,20 @@ class ResearchTools:
         except Exception as exc:  # defensive tool boundary
             return {
                 "success": False,
-                "error": f"Academic research tool failed: {type(exc).__name__}: {exc}",
+                "error": self.credentials.redact(
+                    f"Academic research tool failed: {type(exc).__name__}: {exc}"
+                ),
             }
 
+    @_credential_safe
     async def provider_status(self) -> dict[str, Any]:
         """Report configured providers without exposing secret values."""
-        return {"success": True, "providers": provider_status()}
+        return {
+            "success": True,
+            "providers": provider_status(resolver=self.credentials),
+        }
 
+    @_credential_safe
     async def search_papers(
         self,
         query: str,
@@ -100,16 +149,67 @@ class ResearchTools:
         limit_per_source: int = 10,
         year: str | int | None = None,
     ) -> dict[str, Any]:
-        """Search multiple scholarly providers and deduplicate the results."""
-        return await self._run(
-            lambda: self.service.search(
+        """Search available providers and degrade gracefully around optional ones."""
+        service = self._research_service()
+        if sources is None:
+            return await self._run(
+                lambda: service.search(
+                    query,
+                    sources=None,
+                    limit_per_source=limit_per_source,
+                    year=year,
+                )
+            )
+
+        requested = list(dict.fromkeys(sources))
+        unknown = [source for source in requested if source not in _KNOWN_PROVIDERS]
+        if unknown:
+            return {
+                "success": False,
+                "error": "Unknown source: " + ", ".join(unknown),
+            }
+        available = [source for source in requested if source in service.providers]
+        unavailable = [source for source in requested if source not in service.providers]
+        configuration = {
+            source: _CONFIGURE_COMMANDS[source]
+            for source in unavailable
+            if source in _CONFIGURE_COMMANDS
+        }
+        if not available:
+            payload: dict[str, Any] = {
+                "success": False,
+                "error": "Requested providers are not configured: "
+                + ", ".join(unavailable),
+                "requires_user_action": True,
+                "configure_commands": configuration,
+                "available_fallbacks": list(service.providers),
+            }
+            if len(configuration) == 1:
+                payload["configure_command"] = next(iter(configuration.values()))
+            return payload
+
+        def search_available() -> dict[str, Any]:
+            result = service.search(
                 query,
-                sources=sources,
+                sources=available,
                 limit_per_source=limit_per_source,
                 year=year,
-            )
-        )
+            ).to_dict()
+            result["sources_requested"] = requested
+            result["sources_failed"] = [*result["sources_failed"], *unavailable]
+            for source in unavailable:
+                result["errors"][source] = "Provider is not configured"
+            if unavailable:
+                result["warnings"].append(
+                    "Optional providers were skipped: " + ", ".join(unavailable)
+                )
+            result["requires_user_action"] = False
+            result["optional_configuration"] = configuration
+            return result
 
+        return await self._run(search_available)
+
+    @_credential_safe
     async def search_arxiv(
         self,
         query: str | None = None,
@@ -131,6 +231,7 @@ class ResearchTools:
             )
         )
 
+    @_credential_safe
     async def search_semantic_scholar(
         self,
         query: str,
@@ -139,12 +240,14 @@ class ResearchTools:
         year: str | int | None = None,
     ) -> dict[str, Any]:
         """Search the official Semantic Scholar Academic Graph API."""
+        semantic_scholar = self._semantic_provider()
         return await self._run(
-            lambda: self.semantic_scholar.search(
+            lambda: semantic_scholar.search(
                 query, limit=limit, offset=offset, year=year
             )
         )
 
+    @_credential_safe
     async def search_scopus(
         self,
         query: str,
@@ -159,12 +262,15 @@ class ResearchTools:
         content: str = "all",
     ) -> dict[str, Any]:
         """Search Scopus using the user's Elsevier API credentials."""
-        if self.scopus is None:
+        scopus = self._scopus_provider()
+        if scopus is None:
             return {
                 "success": False,
                 "error": "ELSEVIER_API_KEY is not configured; see docs/providers/scopus.md",
+                "authentication": "required",
+                "requires_user_action": True,
+                "configure_command": _CONFIGURE_COMMANDS["scopus"],
             }
-        scopus = self.scopus
         return await self._run(
             lambda: scopus.search(
                 query,
@@ -180,6 +286,7 @@ class ResearchTools:
             )
         )
 
+    @_credential_safe
     async def get_scopus_abstract(
         self,
         identifier: str,
@@ -187,32 +294,40 @@ class ResearchTools:
         view: str = "META_ABS",
     ) -> dict[str, Any]:
         """Retrieve normalized Scopus abstract metadata by DOI, EID, or ID."""
-        if self.scopus is None:
+        scopus = self._scopus_provider()
+        if scopus is None:
             return {
                 "success": False,
                 "error": "ELSEVIER_API_KEY is not configured; see docs/providers/scopus.md",
+                "authentication": "required",
+                "requires_user_action": True,
+                "configure_command": _CONFIGURE_COMMANDS["scopus"],
             }
-        scopus = self.scopus
         return await self._run(
             lambda: scopus.get_abstract(
                 identifier, identifier_type=identifier_type, view=view
             )
         )
 
+    @_credential_safe
     async def search_scopus_authors(
         self, query: str, limit: int = 25, start: int = 0
     ) -> dict[str, Any]:
         """Search official Scopus author profiles."""
-        if self.scopus is None:
+        scopus = self._scopus_provider()
+        if scopus is None:
             return {
                 "success": False,
                 "error": "ELSEVIER_API_KEY is not configured; see docs/providers/scopus.md",
+                "authentication": "required",
+                "requires_user_action": True,
+                "configure_command": _CONFIGURE_COMMANDS["scopus"],
             }
-        scopus = self.scopus
         return await self._run(
             lambda: scopus.search_authors(query, limit=limit, start=start)
         )
 
+    @_credential_safe
     async def search_google_scholar(
         self,
         query: str,
@@ -224,12 +339,18 @@ class ResearchTools:
         sort_by_date: bool = False,
     ) -> dict[str, Any]:
         """Search Google Scholar through optional third-party SerpAPI."""
-        if self.google_scholar is None:
+        google_scholar = self._google_provider()
+        if google_scholar is None:
             return {
                 "success": False,
-                "error": "SERPAPI_API_KEY is not configured; see docs/providers/serpapi.md",
+                "error": (
+                    "SERPAPI_API_KEY is not configured; "
+                    "see docs/providers/google-scholar-serpapi.md"
+                ),
+                "authentication": "required",
+                "requires_user_action": True,
+                "configure_command": _CONFIGURE_COMMANDS["google_scholar"],
             }
-        google_scholar = self.google_scholar
         return await self._run(
             lambda: google_scholar.search(
                 query,

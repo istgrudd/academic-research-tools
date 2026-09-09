@@ -10,7 +10,6 @@ on:
       tag:
         description: Git tag to publish
         required: true
-        default: v0.1.0
         type: string
 
 permissions:

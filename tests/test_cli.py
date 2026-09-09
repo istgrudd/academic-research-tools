@@ -1,6 +1,7 @@
 import json
 
 from academic_research.cli import main
+from academic_research.credentials import CredentialResolver
 from academic_research.models import Paper, UnifiedSearchResult
 
 
@@ -87,3 +88,115 @@ def test_serve_delegates_to_mcp_entrypoint(monkeypatch):
 
     assert main(["serve"]) == 0
     assert called == [True]
+
+
+def test_configure_scopus_uses_hidden_prompt_and_never_prints_secret(
+    monkeypatch, capsys, tmp_path
+):
+    resolver = CredentialResolver(config_path=tmp_path / "credentials.json", environ={})
+    monkeypatch.setattr("academic_research.cli.CredentialResolver", lambda: resolver)
+    monkeypatch.setattr(
+        "academic_research.cli._read_secret", lambda prompt: "interactive-secret"
+    )
+
+    assert main(["configure", "--provider", "scopus"]) == 0
+
+    captured = capsys.readouterr()
+    assert resolver.get("ELSEVIER_API_KEY") == "interactive-secret"
+    assert "interactive-secret" not in captured.out
+    assert "interactive-secret" not in captured.err
+    assert "Scopus" in captured.out
+
+
+def test_configure_remove_deletes_only_selected_saved_credential(
+    monkeypatch, capsys, tmp_path
+):
+    resolver = CredentialResolver(config_path=tmp_path / "credentials.json", environ={})
+    resolver.set("ELSEVIER_API_KEY", "saved-secret")
+    resolver.set("SERPAPI_API_KEY", "other-secret")
+    monkeypatch.setattr("academic_research.cli.CredentialResolver", lambda: resolver)
+
+    assert main(["configure", "--remove", "scopus"]) == 0
+
+    assert resolver.get("ELSEVIER_API_KEY") is None
+    assert resolver.get("SERPAPI_API_KEY") == "other-secret"
+    assert "saved-secret" not in capsys.readouterr().out
+
+
+def test_configure_without_provider_shows_menu_and_prompts(monkeypatch, capsys, tmp_path):
+    resolver = CredentialResolver(config_path=tmp_path / "credentials.json", environ={})
+    monkeypatch.setattr("academic_research.cli.CredentialResolver", lambda: resolver)
+    monkeypatch.setattr("builtins.input", lambda prompt: "1")
+    monkeypatch.setattr("academic_research.cli._read_secret", lambda prompt: "menu-secret")
+
+    assert main(["configure"]) == 0
+
+    assert resolver.get("ELSEVIER_API_KEY") == "menu-secret"
+    output = capsys.readouterr().out
+    assert "Scopus / Elsevier" in output
+    assert "menu-secret" not in output
+
+
+def test_install_command_reports_optional_configuration_without_prompting(
+    monkeypatch, capsys
+):
+    calls = []
+
+    def fake_install(platform):
+        calls.append(platform)
+        return {
+            "platform": platform,
+            "configured": True,
+            "server": "academic-research",
+            "launcher": ["academic-research", "serve"],
+            "skill_path": "/tmp/SKILL.md",
+            "credentials_requested": False,
+        }
+
+    monkeypatch.setattr("academic_research.cli.install_platform", fake_install)
+
+    assert main(["install", "--platform", "codex"]) == 0
+
+    output = capsys.readouterr().out
+    assert calls == ["codex"]
+    assert "Ready now" in output
+    assert "arXiv" in output
+    assert "Optionally" in output
+    assert "academic-research configure" in output
+
+
+def test_doctor_json_returns_success_when_optional_credentials_are_missing(
+    monkeypatch, capsys, tmp_path
+):
+    resolver = CredentialResolver(config_path=tmp_path / "credentials.json", environ={})
+    monkeypatch.setattr("academic_research.cli.CredentialResolver", lambda: resolver)
+
+    assert main(["doctor", "--json"]) == 0
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["success"] is True
+    assert payload["ready_for_search"] is True
+    assert payload["onboarding"]["configuration_required"] is False
+
+
+def test_forbidden_secret_argument_is_rejected_without_echoing_value(capsys):
+    assert main(
+        ["configure", "--provider", "scopus", "--api-key", "argument-secret"]
+    ) == 2
+
+    captured = capsys.readouterr()
+    assert "argument-secret" not in captured.out
+    assert "argument-secret" not in captured.err
+    assert "interactive terminal" in captured.err
+
+    for option in (
+        "--elsevier-api-key=embedded-secret",
+        "--apikey=embedded-secret",
+        "--apiKey=embedded-secret",
+    ):
+        assert main(
+            ["configure", "--provider", "scopus", option]
+        ) == 2
+        captured = capsys.readouterr()
+        assert "embedded-secret" not in captured.out
+        assert "embedded-secret" not in captured.err

@@ -21,7 +21,7 @@ Find the command path with `command -v academic-research` on Unix or `Get-Comman
 
 ## Ephemeral `uvx`
 
-After the package is published to PyPI:
+Run directly from PyPI without a prior installation:
 
 ```json
 {
@@ -43,7 +43,13 @@ The explicit `--from` form is required because the distribution is named `academ
 
 ## Credentials
 
-Add only required provider variables using the host's supported environment mechanism:
+The recommended local setup is the protected shared user configuration:
+
+```bash
+academic-research configure
+```
+
+The MCP adapter re-resolves credentials for every tool call, so a newly saved provider key is visible without restarting the MCP process. Environment variables remain available for CI, containers, and host-managed secrets, and take precedence over the user configuration:
 
 ```json
 {
@@ -56,7 +62,9 @@ Add only required provider variables using the host's supported environment mech
 }
 ```
 
-Not every MCP host expands `${...}` placeholders. If yours does not, use its secret manager or start the host from a shell where variables are already exported. Avoid committing plaintext MCP configuration.
+Not every MCP host expands `${...}` placeholders. If yours does not, use its secret manager, use the protected user configuration, or start the host from a shell where variables are already exported. Avoid committing plaintext MCP configuration.
+
+Credential setup is optional for the first search. Never place API keys in agent chat, MCP arguments, or command-line flags.
 
 ## Verification
 
@@ -64,6 +72,6 @@ Not every MCP host expands `${...}` placeholders. If yours does not, use its sec
 2. list tools and confirm `research_provider_status` exists
 3. call `research_provider_status`
 4. run `search_arxiv` with `query="agentic literature review"` and `limit=1`
-5. add credentialed providers only after the keyless smoke test succeeds
+5. optionally configure additional providers only after the keyless smoke test succeeds
 
 If the process exits immediately, run the configured command manually and check its environment and Python installation. Protocol logs must go to standard error, never standard output, because stdout is reserved for MCP messages.

@@ -76,3 +76,12 @@ In the pull request, include the commands run and their real outputs. CI must pa
 ## Releases
 
 Only maintainers publish packages and tags. The release process verifies a clean source distribution and wheel, installs the wheel in a fresh environment, smoke-tests the CLI and MCP server, and checks that no credentials or large provider responses are included.
+
+After a release commit is merged and CI is green:
+
+1. Open **Actions → Create GitHub Release → Run workflow**.
+2. Select the `main` branch and enter the package version without a `v` prefix, for example `0.2.0`.
+3. The workflow verifies the version, reruns the release quality gates, creates an annotated tag and GitHub Release, attaches the distributions, and dispatches the Trusted Publishing workflow.
+4. Confirm that the separate **Publish to PyPI** run succeeds and that the version appears on PyPI.
+
+The release workflow intentionally refuses non-`main` dispatches, mismatched versions, tags pointing to another commit, and existing GitHub Releases. If GitHub Release creation succeeds but PyPI publishing fails, rerun **Publish to PyPI** manually with the existing tag; do not recreate or overwrite the version.

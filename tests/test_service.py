@@ -2,6 +2,7 @@ import asyncio
 
 import pytest
 
+from academic_research.credentials import CredentialResolver
 from academic_research.mcp_server import ResearchTools, create_server
 from academic_research.models import Author, Paper, SearchResult
 from academic_research.service import ResearchService
@@ -139,11 +140,45 @@ def test_unified_search_falls_back_to_normalized_title_and_year():
     assert result.papers[0].provenance["dedupe_key"] == "title_year"
 
 
-def test_unified_search_rejects_unknown_or_unavailable_sources():
+def test_unknown_source_is_rejected_before_any_provider_runs():
     service = ResearchService(providers={"arxiv": StubProvider("arxiv")})
 
-    with pytest.raises(ValueError, match="Unknown or unavailable source: pubmed"):
+    with pytest.raises(ValueError, match="Unknown or unavailable source"):
         service.search("test", sources=["pubmed"])
+
+
+def test_service_builds_optional_providers_from_saved_credentials(tmp_path):
+    resolver = CredentialResolver(config_path=tmp_path / "credentials.json", environ={})
+    resolver.set("ELSEVIER_API_KEY", "stored-elsevier-secret")
+    resolver.set("SERPAPI_API_KEY", "stored-serpapi-secret")
+
+    service = ResearchService.from_environment(resolver=resolver)
+
+    assert set(service.providers) == {
+        "arxiv",
+        "semantic_scholar",
+        "scopus",
+        "google_scholar",
+    }
+
+
+def test_unified_service_redacts_credentials_from_provider_errors(tmp_path):
+    class FailingProvider:
+        def search(self, query, **kwargs):
+            raise RuntimeError("request failed: api_key=key%2Fwith+space")
+
+    resolver = CredentialResolver(config_path=tmp_path / "credentials.json", environ={})
+    resolver.set("SERPAPI_API_KEY", "key/with space")
+    service = ResearchService(
+        providers={"arxiv": FailingProvider()},
+        redact=resolver.redact,
+    )
+
+    result = service.search("traffic flow", sources=["arxiv"])
+
+    assert result.sources_failed == ["arxiv"]
+    assert "key/with space" not in result.errors["arxiv"]
+    assert "key%2Fwith+space" not in result.errors["arxiv"]
 
 
 def test_unified_search_is_exposed_through_mcp():

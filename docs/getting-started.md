@@ -4,9 +4,17 @@
 
 - Python 3.10 or newer
 - internet access to the provider endpoint you use
-- credentials only for the providers that require them
+- credentials only for providers that require them
 
-## Install from source
+## Install from PyPI
+
+```bash
+pip install academic-research-tools
+# or
+pipx install academic-research-tools
+```
+
+Install from source for development:
 
 ```bash
 git clone https://github.com/istgrudd/academic-research-tools.git
@@ -16,12 +24,11 @@ python -m venv .venv
 python -m pip install .
 ```
 
-After the first PyPI release, `pip install academic-research-tools` and `pipx install academic-research-tools` provide the same CLI.
-
-Verify the installation:
+Verify the installation without adding credentials:
 
 ```bash
 academic-research --version
+academic-research doctor
 academic-research status
 ```
 
@@ -29,7 +36,7 @@ academic-research status
 
 ```bash
 academic-research search "traffic flow estimation low visibility" \
-  --sources arxiv semantic_scholar \
+  --sources arxiv,semantic_scholar \
   --limit 5
 ```
 
@@ -44,22 +51,39 @@ Available source identifiers are:
 
 `google_scholar` means Google Scholar discovery through SerpAPI.
 
-## Configure optional providers
+## Optional provider configuration
 
-Export only the credentials you need. For example:
-
-```bash
-export SEMANTIC_SCHOLAR_API_KEY="..."
-export ELSEVIER_API_KEY="..."
-```
-
-Then verify booleans, not secret values:
+Do not configure credentials merely to prove the package works. When you want Scopus, Google Scholar through SerpAPI, or dedicated Semantic Scholar quota, run:
 
 ```bash
-academic-research status --json
+academic-research configure
 ```
 
-Read [Credential setup](credentials.md) before storing keys.
+The wizard uses hidden terminal input and stores the selected credential in a protected user configuration file. Environment variables remain supported and take precedence.
+
+Useful commands:
+
+```bash
+academic-research configure --list
+academic-research configure --remove scopus
+academic-research doctor --json
+```
+
+Read [Credential setup](credentials.md) before storing keys. Never paste an API key into an AI chat or pass it as a command argument.
+
+## Claude Code and Codex
+
+Register both the MCP server and bundled workflow skill with one command:
+
+```bash
+academic-research install --platform claude-code
+# or
+academic-research install --platform codex
+```
+
+Installation is non-interactive with respect to credentials. It does not run `academic-research configure`. arXiv and Semantic Scholar public access are ready for immediate use.
+
+See [Claude Code integration](integrations/claude-code.md) and [Codex integration](integrations/codex.md).
 
 ## Use the Python API
 
@@ -77,6 +101,8 @@ print(result.retrieved_count, result.deduplicated_count)
 for paper in result.papers:
     print(paper.title, paper.source_ids)
 ```
+
+`ResearchService.from_environment()` resolves environment variables first and the protected user configuration second. Recreate the service instance after changing credentials in a long-running Python process. The MCP adapter reloads credentials for each tool call automatically.
 
 ## Start the MCP server
 

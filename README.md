@@ -28,7 +28,11 @@ The package remains useful without credentials: arXiv is available immediately a
 - Local stdio MCP server for compatible clients
 - Automation-friendly CLI and direct Python API
 - Thin native Hermes Agent adapter
-- Local-first credentials with no telemetry
+- Protected local credential configuration with environment overrides
+- Interactive hidden-input credential wizard and offline diagnostics
+- One-command Claude Code and Codex MCP plus skill installation
+- Progressive onboarding that never blocks the first keyless search
+- No telemetry
 
 ## Installation
 
@@ -44,8 +48,6 @@ python -m pip install .
 
 ### From PyPI
 
-After the first package release:
-
 ```bash
 pip install academic-research-tools
 # or
@@ -56,10 +58,29 @@ No credential is required to verify the installation:
 
 ```bash
 academic-research --version
+academic-research doctor
 academic-research status
 academic-research search "traffic flow estimation low visibility" \
-  --sources arxiv semantic_scholar --limit 5
+  --sources arxiv,semantic_scholar --limit 5
 ```
+
+Configure optional providers later, only when you need them:
+
+```bash
+academic-research configure
+```
+
+Secret input is hidden. Do not paste API keys into chat or pass them as command arguments.
+
+Install the MCP server and workflow skill for a coding agent:
+
+```bash
+academic-research install --platform claude-code
+# or
+academic-research install --platform codex
+```
+
+The installer does not launch credential configuration. arXiv and Semantic Scholar public access remain ready for immediate use.
 
 See [Getting started](docs/getting-started.md) and [Credential setup](docs/credentials.md).
 
@@ -99,7 +120,7 @@ Generic MCP configuration:
 }
 ```
 
-Only include environment variables for providers you intend to use. Details: [generic MCP](docs/integrations/generic-mcp.md), [Claude Desktop](docs/integrations/claude-desktop.md), and [Cursor](docs/integrations/cursor.md).
+Only include environment variables for providers you intend to use. The protected user configuration is also read automatically. Details: [generic MCP](docs/integrations/generic-mcp.md), [Claude Code](docs/integrations/claude-code.md), [Codex](docs/integrations/codex.md), [Claude Desktop](docs/integrations/claude-desktop.md), and [Cursor](docs/integrations/cursor.md).
 
 ### MCP tools
 
@@ -132,7 +153,7 @@ if result.errors:
     print("Partial provider failures:", result.errors)
 ```
 
-A provider that is not configured is excluded from `ResearchService.from_environment()`. Explicitly requesting a missing provider returns an actionable error rather than silently changing the requested source list.
+A provider that is not configured is excluded from `ResearchService.from_environment()`. The MCP unified search preserves results from available providers and reports missing optional providers with a configuration command. A provider-specific request returns an actionable error rather than silently substituting a different source.
 
 ## Hermes Agent
 
@@ -148,11 +169,15 @@ See [Hermes integration](docs/integrations/hermes.md).
 
 ## Credential safety
 
-Credentials are read only from environment variables. This project does not:
+Credentials are resolved from environment variables first and a protected per-user JSON file second. The interactive wizard writes mode `0700` directories and mode `0600` files on Unix. The local file is plaintext and is not an encrypted vault.
+
+This project does not:
 
 - accept secrets as command-line arguments
 - print credential values in `status`
-- store credentials or API responses automatically
+- request credentials through an agent conversation
+- display credential values in diagnostics or provider status
+- store API responses automatically
 - send telemetry
 - require all providers to be configured
 
@@ -177,7 +202,7 @@ Tests use synthetic fixtures and do not spend provider quota. See [CONTRIBUTING.
 - Citation counts from different providers are retained with provenance and should not be treated as directly interchangeable.
 - Deduplication is intentionally conservative; ambiguous records may remain separate.
 - This project does not bypass paywalls or grant access beyond the user's provider entitlement.
-- Remote hosted MCP, long-term credential storage, and automatic literature-review decisions are outside the v0.1 scope.
+- Remote hosted MCP, operating-system keyring integration, and automatic literature-review decisions are outside the v0.2 scope.
 
 ## Legal and data-provider notice
 

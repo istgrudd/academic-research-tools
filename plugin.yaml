@@ -1,5 +1,5 @@
 name: academic-research
-version: 0.1.0
+version: 0.2.0
 description: Evidence-grounded academic literature discovery across arXiv, Semantic Scholar, Scopus, and optional Google Scholar.
 author: Rudi Firdaus
 kind: standalone

@@ -1,5 +1,6 @@
 """Academic Research Tools public Python API."""
 
+from .credentials import CredentialConfigError, CredentialResolver
 from .models import Author, Paper, SearchResult, UnifiedSearchResult
 from .providers.arxiv import ArxivAPIError, ArxivProvider
 from .providers.scopus import ElsevierAPIError, ScopusProvider
@@ -14,6 +15,8 @@ __all__ = [
     "ArxivAPIError",
     "ArxivProvider",
     "Author",
+    "CredentialConfigError",
+    "CredentialResolver",
     "ElsevierAPIError",
     "Paper",
     "ResearchService",
@@ -26,4 +29,4 @@ __all__ = [
     "UnifiedSearchResult",
     "deduplicate_papers",
 ]
-__version__ = "0.1.0"
+__version__ = "0.2.0"
