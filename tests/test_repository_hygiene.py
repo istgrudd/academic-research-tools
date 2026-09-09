@@ -88,6 +88,8 @@ def test_release_automation_preserves_a_manual_immutable_version_gate():
     assert "gh workflow run publish.yml" in release
     assert "Smoke-test built wheel and MCP stdio" in release
     assert "stdio_client" in release
+    assert 'payload.get("providers"' in release
+    assert 'payload.get("ready_for_search")' not in release
     assert "release:" not in release.split("workflow_dispatch:", 1)[0]
     assert "default: v0.1.0" not in publish
     assert "id-token: write" in publish
