@@ -147,8 +147,16 @@ jobs:
                       if result.is_error:
                           raise SystemExit("MCP provider status returned an error")
                       payload = json.loads(result.content[0].text)
-                      if not payload.get("ready_for_search"):
-                          raise SystemExit("No keyless research provider is available")
+                      providers = payload.get("providers", {})
+                      arxiv = providers.get("arxiv", {})
+                      if not (
+                          payload.get("success")
+                          and arxiv.get("available")
+                          and arxiv.get("authentication") == "not_required"
+                      ):
+                          raise SystemExit(
+                              f"Unexpected MCP provider status: {payload}"
+                          )
 
 
           asyncio.run(smoke())
