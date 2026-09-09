@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
+from .credentials import CredentialConfigError, CredentialResolver
 from .hermes_schemas import SCHEMAS
 from .mcp_server import ResearchTools
 
@@ -48,7 +48,10 @@ _METHODS = {
 
 
 def _configured(name: str) -> bool:
-    return bool(os.environ.get(name, "").strip())
+    try:
+        return bool(CredentialResolver().get(name))
+    except CredentialConfigError:
+        return False
 
 
 def _run_async(method: Callable[..., Any], args: dict[str, Any]) -> Any:

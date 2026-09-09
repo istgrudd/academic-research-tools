@@ -11,11 +11,11 @@ Obtain and manage access through the official [Semantic Scholar API documentatio
 ## Configuration
 
 ```bash
-export SEMANTIC_SCHOLAR_API_KEY="your-key"
+academic-research configure --provider semantic-scholar
 academic-research status
 ```
 
-The value is sent in the `x-api-key` request header and is never returned by `status`.
+The wizard uses hidden input and protected local storage. Environment variables remain supported and take precedence. The value is sent in the `x-api-key` request header and is never returned by status or diagnostics.
 
 ## Example
 

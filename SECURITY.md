@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Until a stable release, only the latest `0.1.x` release receives security fixes.
+Until a stable release, only the latest `0.2.x` release receives security fixes.
 
 ## Reporting a vulnerability
 
@@ -20,14 +20,17 @@ If private reporting is unavailable, contact `digitalrudi14@gmail.com` with the 
 
 Academic Research Tools is local-first:
 
-- provider credentials are read from environment variables
+- provider credentials are resolved from environment variables or a protected per-user configuration file
 - credentials are not accepted as CLI arguments
-- `status` reports booleans only and never echoes values
+- interactive credential input uses a hidden terminal prompt and refuses non-interactive input
+- user configuration is written with directory mode `0700` and file mode `0600` on Unix
+- insecure credential-file permissions are rejected on Unix
+- `status` and `doctor` report availability and source only, never values
 - no telemetry is implemented
 - provider responses are returned to the caller and are not automatically persisted
-- MCP v0.1 uses local stdio transport rather than a hosted credential-custody service
+- MCP v0.2 uses local stdio transport rather than a hosted credential-custody service
 
-`.env` files are ignored by Git. `.env.example` contains empty values only. Users remain responsible for their shell history, process environment, MCP host configuration, local file permissions, and provider account security.
+The protected JSON file is plaintext and is not an encrypted vault or operating-system keyring. `.env` files are ignored by Git and `.env.example` contains empty values only. Users remain responsible for shell history, process environment, MCP host configuration, backups, local account security, and provider account security.
 
 ## Safe disclosure and rotation
 

@@ -26,9 +26,15 @@ hermes plugins enable academic-research
 
 The distribution declares `academic_research.hermes_plugin:register` in the `hermes_agent.plugins` entry-point group.
 
-## Configure credentials
+## Optional credential configuration
 
-Set environment variables in the environment that starts Hermes, then restart the Hermes session or gateway:
+The tools work immediately with arXiv and Semantic Scholar public access. Configure additional providers later from a trusted local terminal:
+
+```bash
+academic-research configure
+```
+
+The local wizard uses hidden input. Hermes reads the shared protected user configuration, and long-running MCP processes detect saved credentials on their next tool call. Environment variables are also supported and take precedence:
 
 ```bash
 export SEMANTIC_SCHOLAR_API_KEY="..."  # optional
@@ -38,6 +44,8 @@ export SERPAPI_API_KEY="..."           # experimental adapter only
 ```
 
 There is no global `requires_env` gate. arXiv, provider status, unified search, and unauthenticated Semantic Scholar remain available without optional keys. Hermes hides Scopus or SerpAPI tools through per-tool checks when their required key is absent.
+
+After agent-driven installation, Hermes should perform the requested keyless search first and mention configuration only as an optional next step. It must never request an API key in chat. Configuration becomes required only when the user explicitly requests a provider whose key is missing; available providers should be offered as an immediate fallback.
 
 ## Verify
 

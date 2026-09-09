@@ -31,7 +31,7 @@ For a source checkout, point `command` at the absolute installed executable:
 }
 ```
 
-Configure optional environment variables through Cursor's supported local settings or a private `env` object. Do not commit API keys in `.cursor/mcp.json`.
+Use `academic-research configure` for protected shared user configuration, or configure optional environment variables through Cursor's supported local settings or a private `env` object. Do not commit API keys in `.cursor/mcp.json`.
 
 Reload Cursor after editing the configuration. Verify `research_provider_status`, then run a one-result arXiv search. If tools are absent, execute the configured command in a terminal and confirm the same Python environment can import `academic_research`.
 

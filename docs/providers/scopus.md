@@ -15,13 +15,13 @@ Obtain and manage a key through the official [Elsevier Developer Portal](https:/
 ## Configuration
 
 ```bash
-export ELSEVIER_API_KEY="your-key"
+academic-research configure --provider scopus
 # Only if issued by an eligible institution:
-export ELSEVIER_INST_TOKEN="your-institution-token"
+academic-research configure --provider scopus-institutional
 academic-research status
 ```
 
-The API key is sent in `X-ELS-APIKey`. The optional institutional token is sent in `X-ELS-Insttoken`. Neither value is printed or persisted by this package.
+The wizard accepts each value through a hidden prompt and stores it in the protected user configuration. Environment variables remain supported and take precedence. The API key is sent in `X-ELS-APIKey`; the optional institutional token is sent in `X-ELS-Insttoken`. Neither value is printed by status or diagnostics.
 
 ## Search syntax
 

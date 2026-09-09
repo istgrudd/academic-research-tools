@@ -21,6 +21,8 @@ def test_public_repository_files_are_complete():
         "docs/providers/google-scholar-serpapi.md",
         "docs/integrations/generic-mcp.md",
         "docs/integrations/hermes.md",
+        "docs/integrations/claude-code.md",
+        "docs/integrations/codex.md",
         "docs/integrations/claude-desktop.md",
         "docs/integrations/cursor.md",
     ]
@@ -34,6 +36,22 @@ def test_release_metadata_has_no_placeholders_or_global_credential_gate():
     assert "OWNER" not in metadata
     assert "requires_env:" not in manifest
     assert "github.com/istgrudd/academic-research-tools" in metadata
+
+
+def test_release_versions_and_progressive_onboarding_are_synchronized():
+    metadata = (ROOT / "pyproject.toml").read_text()
+    package = (ROOT / "src/academic_research/__init__.py").read_text()
+    manifest = (ROOT / "plugin.yaml").read_text()
+    skill = (
+        ROOT
+        / "src/academic_research/skills/academic-research-workflow/SKILL.md"
+    ).read_text()
+
+    assert 'version = "0.2.0"' in metadata
+    assert '__version__ = "0.2.0"' in package
+    assert "version: 0.2.0" in manifest
+    assert "version: 0.2.0" in skill
+    assert "Do not require it for the first search" in skill
 
 
 def test_env_example_contains_names_but_no_secret_values():

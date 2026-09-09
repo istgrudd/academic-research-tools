@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import copy
-import os
 import re
 import unicodedata
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
+from .credentials import CredentialResolver
 from .models import Author, Paper, SearchResult, UnifiedSearchResult
 from .providers.arxiv import ArxivProvider
 from .providers.scopus import ScopusProvider
@@ -115,27 +116,36 @@ def deduplicate_papers(papers: list[Paper]) -> list[Paper]:
 class ResearchService:
     """Provider-neutral orchestration and partial-failure boundary."""
 
-    def __init__(self, *, providers: dict[str, Any]):
+    def __init__(
+        self,
+        *,
+        providers: dict[str, Any],
+        redact: Callable[[str], str] | None = None,
+    ):
         self.providers = dict(providers)
+        self._redact = redact or (lambda text: text)
 
     @classmethod
-    def from_environment(cls) -> ResearchService:
+    def from_environment(
+        cls, *, resolver: CredentialResolver | None = None
+    ) -> ResearchService:
+        credentials = resolver or CredentialResolver()
         providers: dict[str, Any] = {
             "arxiv": ArxivProvider(),
             "semantic_scholar": SemanticScholarProvider(
-                os.environ.get("SEMANTIC_SCHOLAR_API_KEY")
+                credentials.get("SEMANTIC_SCHOLAR_API_KEY")
             ),
         }
-        elsevier_key = os.environ.get("ELSEVIER_API_KEY", "").strip()
+        elsevier_key = credentials.get("ELSEVIER_API_KEY")
         if elsevier_key:
             providers["scopus"] = ScopusProvider(
                 elsevier_key,
-                inst_token=os.environ.get("ELSEVIER_INST_TOKEN"),
+                inst_token=credentials.get("ELSEVIER_INST_TOKEN"),
             )
-        serpapi_key = os.environ.get("SERPAPI_API_KEY", "").strip()
+        serpapi_key = credentials.get("SERPAPI_API_KEY")
         if serpapi_key:
             providers["google_scholar"] = SerpAPIScholarProvider(serpapi_key)
-        return cls(providers=providers)
+        return cls(providers=providers, redact=credentials.redact)
 
     def _search_one(
         self,
@@ -194,7 +204,7 @@ class ResearchService:
                 try:
                     pages[source] = future.result()
                 except Exception as exc:  # provider isolation boundary
-                    errors[source] = f"{type(exc).__name__}: {exc}"
+                    errors[source] = self._redact(f"{type(exc).__name__}: {exc}")
 
         succeeded = [source for source in requested if source in pages]
         failed = [source for source in requested if source in errors]

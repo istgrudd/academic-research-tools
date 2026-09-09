@@ -9,9 +9,11 @@ A `SERPAPI_API_KEY` and an active SerpAPI account or allowance are required. Rev
 ## Configuration
 
 ```bash
-export SERPAPI_API_KEY="your-key"
+academic-research configure --provider google-scholar
 academic-research status
 ```
+
+The wizard uses hidden input and protected local storage. Environment variables remain supported and take precedence.
 
 ## Example
 
