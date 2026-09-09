@@ -24,7 +24,7 @@ Academic Research Tools is local-first:
 - credentials are not accepted as CLI arguments
 - interactive credential input uses a hidden terminal prompt and refuses non-interactive input
 - user configuration is written with directory mode `0700` and file mode `0600` on Unix
-- insecure credential-file permissions are rejected on Unix
+- insecure credential file and directory permissions are rejected on Unix
 - `status` and `doctor` report availability and source only, never values
 - no telemetry is implemented
 - provider responses are returned to the caller and are not automatically persisted

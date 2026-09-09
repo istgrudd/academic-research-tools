@@ -22,6 +22,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - One-command MCP and workflow-skill installation for Claude Code and Codex
 - Machine-readable configuration commands for explicitly requested providers that are unavailable
 - Claude Code and Codex integration guides
+- One-click, manually dispatched GitHub Release automation with Trusted Publishing handoff
 
 ### Changed
 

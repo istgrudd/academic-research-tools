@@ -13,6 +13,8 @@ def test_public_repository_files_are_complete():
         "CHANGELOG.md",
         ".env.example",
         ".github/workflows/ci.yml",
+        ".github/workflows/publish.yml",
+        ".github/workflows/release.yml",
         "docs/getting-started.md",
         "docs/credentials.md",
         "docs/providers/arxiv.md",
@@ -70,3 +72,22 @@ def test_readme_contains_legal_and_arxiv_notices():
     assert "independent, unofficial integration" in readme
     assert "Thank you to arXiv for use of its open access interoperability." in readme
     assert "Google Scholar through SerpAPI" in readme
+
+
+def test_release_automation_preserves_a_manual_immutable_version_gate():
+    release = (ROOT / ".github/workflows/release.yml").read_text()
+    publish = (ROOT / ".github/workflows/publish.yml").read_text()
+
+    assert "workflow_dispatch:" in release
+    assert "version:" in release
+    assert "refs/heads/main" in release
+    assert "contents: write" in release
+    assert "git tag -a" in release
+    assert "gh release create" in release
+    assert "--verify-tag" in release
+    assert "gh workflow run publish.yml" in release
+    assert "Smoke-test built wheel and MCP stdio" in release
+    assert "stdio_client" in release
+    assert "release:" not in release.split("workflow_dispatch:", 1)[0]
+    assert "default: v0.1.0" not in publish
+    assert "id-token: write" in publish
