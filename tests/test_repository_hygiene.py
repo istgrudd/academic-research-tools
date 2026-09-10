@@ -32,6 +32,13 @@ def test_public_repository_files_are_complete():
     assert missing == []
 
 
+def test_integration_docs_have_single_canonical_location():
+    manifest = (ROOT / "MANIFEST.in").read_text()
+
+    assert not (ROOT / "integrations").exists()
+    assert "recursive-include integrations" not in manifest
+
+
 def test_release_metadata_has_no_placeholders_or_global_credential_gate():
     metadata = (ROOT / "pyproject.toml").read_text()
     manifest = (ROOT / "plugin.yaml").read_text()
