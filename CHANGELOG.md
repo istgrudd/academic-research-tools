@@ -16,7 +16,7 @@ All notable changes to this project are documented here. The format follows [Kee
 ### Fixed
 
 - arXiv free-text queries are now sent as all-terms field queries (`all:a AND all:b`), with quoted phrases kept as one term, instead of a raw string that matched loosely related papers; explicit arXiv syntax (`ti:`, `abs:`, `au:`, `cat:`, `AND`/`OR`/`ANDNOT`, parentheses) and ID lookups are passed through unchanged
-- When no arXiv paper contains every free-text term, the first page retries once with any-term (`OR`) matching and reports a warning instead of silently returning nothing
+- When no arXiv paper contains every free-text term, the first page drops up to two trailing terms (keeping at least two) and, only if that still finds nothing, falls back to any-term (`OR`) matching; every fallback is reported as a warning with the query actually sent
 - arXiv and Semantic Scholar retry timeouts, connection failures, HTTP 429, and HTTP 5xx up to two times with 1 s and 2 s backoff; other 4xx responses are not retried
 - Network failures now explain that the host could not be reached from the current network and suggest checking firewall, ISP, or VPN restrictions or setting `HTTPS_PROXY`
 - Connection resets and dropped connections are reported as provider network errors instead of escaping as unexpected exceptions

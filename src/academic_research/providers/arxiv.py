@@ -33,6 +33,8 @@ _SYNTAX_PATTERN = re.compile(
     r"|[()]"
 )
 _TERM_PATTERN = re.compile(r'"([^"]*)"|(\S+)')
+# Free-text fallback drops at most this many trailing terms, keeping at least two.
+_MAX_DROPPED_TERMS = 2
 
 
 def _plain_terms(query: str) -> list[str] | None:
@@ -196,15 +198,31 @@ class ArxivProvider:
             and start == 0
             and _int(_text(root, "open:totalResults")) == 0
         ):
-            # No paper matched every term; retry once with any-term matching.
-            search_query = " OR ".join(terms)
-            root = self._fetch({**params, "search_query": search_query})
-            extra_metadata["query_fallback"] = "any_term"
-            warnings.append(
-                "arXiv found no papers containing all query terms; results match any "
-                "term (OR) and may be less relevant. Use arXiv syntax such as ti:, abs:, "
-                "or AND/OR for precise control."
-            )
+            # No paper matched every term. First relax by dropping trailing terms,
+            # then fall back to any-term matching as a last resort.
+            for keep in range(len(terms) - 1, max(1, len(terms) - 1 - _MAX_DROPPED_TERMS), -1):
+                search_query = " AND ".join(terms[:keep])
+                root = self._fetch({**params, "search_query": search_query})
+                if _int(_text(root, "open:totalResults")) > 0:
+                    dropped = [term.removeprefix("all:") for term in terms[keep:]]
+                    extra_metadata["query_fallback"] = "dropped_terms"
+                    extra_metadata["dropped_terms"] = dropped
+                    warnings.append(
+                        "arXiv found no papers containing all query terms; results "
+                        "ignore the trailing term(s) " + ", ".join(dropped) + ". Use "
+                        "fewer terms or arXiv syntax such as ti:, abs:, or AND/OR for "
+                        "precise control."
+                    )
+                    break
+            else:
+                search_query = " OR ".join(terms)
+                root = self._fetch({**params, "search_query": search_query})
+                extra_metadata["query_fallback"] = "any_term"
+                warnings.append(
+                    "arXiv found no papers containing all query terms; results match any "
+                    "term (OR) and may be less relevant. Use arXiv syntax such as ti:, "
+                    "abs:, or AND/OR for precise control."
+                )
 
         papers: list[Paper] = []
         retrieved_at = datetime.now(timezone.utc).isoformat()

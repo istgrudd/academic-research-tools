@@ -97,19 +97,78 @@ def test_arxiv_id_lookup_path_is_unchanged():
     assert len(transport.calls) == 1
 
 
-def test_arxiv_falls_back_to_any_term_with_warning_when_all_terms_match_nothing():
+def sent_queries(transport):
+    return [transport.params(index)["search_query"][0] for index in range(len(transport.calls))]
+
+
+def test_arxiv_drops_trailing_term_before_any_term_fallback():
     transport = SequenceTransport(EMPTY_FEED, ONE_RESULT_FEED)
 
     result = ArxivProvider(transport=transport).search(
         "vehicle counting YOLO ByteTrack", limit=5
     )
 
-    assert len(transport.calls) == 2
-    assert transport.params(0)["search_query"] == [
-        "all:vehicle AND all:counting AND all:YOLO AND all:ByteTrack"
+    relaxed = "all:vehicle AND all:counting AND all:YOLO"
+    assert sent_queries(transport) == [
+        "all:vehicle AND all:counting AND all:YOLO AND all:ByteTrack",
+        relaxed,
     ]
+    assert result.total == 1
+    assert result.query == "vehicle counting YOLO ByteTrack"
+    assert result.metadata["search_query"] == relaxed
+    assert result.metadata["query_fallback"] == "dropped_terms"
+    assert result.metadata["dropped_terms"] == ["ByteTrack"]
+    assert len(result.warnings) == 1
+    assert "ByteTrack" in result.warnings[0]
+
+
+def test_arxiv_drops_at_most_two_terms_and_keeps_at_least_two():
+    transport = SequenceTransport(EMPTY_FEED, EMPTY_FEED, ONE_RESULT_FEED)
+
+    result = ArxivProvider(transport=transport).search("vehicle counting YOLO ByteTrack")
+
+    assert sent_queries(transport)[1:] == [
+        "all:vehicle AND all:counting AND all:YOLO",
+        "all:vehicle AND all:counting",
+    ]
+    assert result.metadata["dropped_terms"] == ["YOLO", "ByteTrack"]
+
+    long_query = SequenceTransport(EMPTY_FEED)
+    ArxivProvider(transport=long_query).search("a b c d e f")
+    assert sent_queries(long_query)[1:] == [
+        "all:a AND all:b AND all:c AND all:d AND all:e",
+        "all:a AND all:b AND all:c AND all:d",
+        "all:a OR all:b OR all:c OR all:d OR all:e OR all:f",
+    ]
+
+
+def test_arxiv_two_term_query_goes_straight_to_any_term_fallback():
+    transport = SequenceTransport(EMPTY_FEED, ONE_RESULT_FEED)
+
+    result = ArxivProvider(transport=transport).search('vehicle "object tracking"')
+
+    assert sent_queries(transport) == [
+        'all:vehicle AND all:"object tracking"',
+        'all:vehicle OR all:"object tracking"',
+    ]
+    assert result.metadata["query_fallback"] == "any_term"
+
+
+def test_arxiv_falls_back_to_any_term_with_warning_when_relaxed_queries_match_nothing():
+    transport = SequenceTransport(EMPTY_FEED, EMPTY_FEED, EMPTY_FEED, ONE_RESULT_FEED)
+
+    result = ArxivProvider(transport=transport).search(
+        "vehicle counting YOLO ByteTrack", limit=5
+    )
+
     or_query = "all:vehicle OR all:counting OR all:YOLO OR all:ByteTrack"
-    assert transport.params(1)["search_query"] == [or_query]
+    assert sent_queries(transport) == [
+        "all:vehicle AND all:counting AND all:YOLO AND all:ByteTrack",
+        "all:vehicle AND all:counting AND all:YOLO",
+        "all:vehicle AND all:counting",
+        or_query,
+    ]
+    assert "dropped_terms" not in result.metadata
     assert result.total == 1
     assert [paper.title for paper in result.papers] == ["Synthetic Vehicle Counting Record"]
     assert result.query == "vehicle counting YOLO ByteTrack"
