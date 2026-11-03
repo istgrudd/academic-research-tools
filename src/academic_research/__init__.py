@@ -29,4 +29,4 @@ __all__ = [
     "UnifiedSearchResult",
     "deduplicate_papers",
 ]
-__version__ = "0.2.0"
+__version__ = "0.2.1"
