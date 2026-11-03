@@ -11,6 +11,23 @@ All notable changes to this project are documented here. The format follows [Kee
 - BibTeX and CSV export
 - Structured literature-screening sessions
 
+## [0.2.1] - 2026-11-04
+
+### Fixed
+
+- arXiv free-text queries are now sent as all-terms field queries (`all:a AND all:b`), with quoted phrases kept as one term, instead of a raw string that matched loosely related papers; explicit arXiv syntax (`ti:`, `abs:`, `au:`, `cat:`, `AND`/`OR`/`ANDNOT`, parentheses) and ID lookups are passed through unchanged
+- When no arXiv paper contains every free-text term, the first page drops up to two trailing terms (keeping at least two) and, only if that still finds nothing, falls back to any-term (`OR`) matching; every fallback is reported as a warning with the query actually sent
+- arXiv and Semantic Scholar retry timeouts, connection failures, HTTP 429, and HTTP 5xx up to two times with 1 s and 2 s backoff; other 4xx responses are not retried
+- Network failures now explain that the host could not be reached from the current network and suggest checking firewall, ISP, or VPN restrictions or setting `HTTPS_PROXY`
+- Connection resets and dropped connections are reported as provider network errors instead of escaping as unexpected exceptions
+- arXiv and Semantic Scholar user agents now report the installed release and the project URL
+- Unified search now includes provider warnings, prefixed by source
+
+### Added
+
+- `academic-research doctor --online` sends one small request with a 10 s timeout to each active provider and reports reachability with `✓`/`✗` and a credential-redacted reason; `--json` adds an `online` section, and offline `doctor` behaviour is unchanged
+- `ACADEMIC_RESEARCH_TIMEOUT` sets the request timeout in seconds for all providers (default 30, clamped to 1–120)
+
 ## [0.2.0] - 2026-09-10
 
 ### Added
@@ -53,6 +70,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Native Hermes Agent adapter with per-provider credential gating
 - Synthetic offline tests, CI, security policy, and provider documentation
 
-[Unreleased]: https://github.com/istgrudd/academic-research-tools/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/istgrudd/academic-research-tools/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/istgrudd/academic-research-tools/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/istgrudd/academic-research-tools/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/istgrudd/academic-research-tools/releases/tag/v0.1.0

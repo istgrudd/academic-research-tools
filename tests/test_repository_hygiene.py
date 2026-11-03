@@ -56,10 +56,10 @@ def test_release_versions_and_progressive_onboarding_are_synchronized():
         / "src/academic_research/skills/academic-research-workflow/SKILL.md"
     ).read_text()
 
-    assert 'version = "0.2.0"' in metadata
-    assert '__version__ = "0.2.0"' in package
-    assert "version: 0.2.0" in manifest
-    assert "version: 0.2.0" in skill
+    assert 'version = "0.2.1"' in metadata
+    assert '__version__ = "0.2.1"' in package
+    assert "version: 0.2.1" in manifest
+    assert "version: 0.2.1" in skill
     assert "Do not require it for the first search" in skill
 
 

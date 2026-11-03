@@ -194,3 +194,18 @@ def test_unified_search_is_exposed_through_mcp():
         return {tool.name for tool in await create_server(tools=tools).list_tools()}
 
     assert "search_papers" in asyncio.run(registered_names())
+
+
+def test_unified_search_surfaces_provider_warnings_with_source_prefix():
+    class WarningProvider(StubProvider):
+        def search(self, query, **kwargs):
+            result = super().search(query, **kwargs)
+            result.warnings.append("Fell back to any-term matching")
+            return result
+
+    service = ResearchService(providers={"arxiv": WarningProvider("arxiv")})
+
+    result = service.search("vehicle counting", sources=["arxiv"])
+
+    assert "arxiv: Fell back to any-term matching" in result.warnings
+    assert result.warnings[0].startswith("Citation counts are provider-specific")

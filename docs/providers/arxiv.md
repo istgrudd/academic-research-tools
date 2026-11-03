@@ -20,6 +20,29 @@ academic-research search "computer vision low visibility" \
 
 The MCP-specific `search_arxiv` tool also accepts `ids`, `start`, `sort_by`, and `sort_order`.
 
+## Query translation
+
+arXiv does not treat a plain string as "all of these words". Free-text queries are therefore translated into all-terms field queries:
+
+| Input | Sent as `search_query` |
+|---|---|
+| `vehicle counting YOLO ByteTrack` | `all:vehicle AND all:counting AND all:YOLO AND all:ByteTrack` |
+| `"traffic volume" estimation` | `all:"traffic volume" AND all:estimation` |
+| `ti:yolo AND abs:traffic` | unchanged |
+
+A query is passed through unchanged when it already uses arXiv syntax: a field prefix such as `ti:`, `abs:`, `au:`, `all:`, `cat:`, `co:`, `jr:`, `rn:`, or `id:`; an upper-case `AND`, `OR`, or `ANDNOT`; or parentheses. Quoted phrases stay one term and empty terms are dropped. ID lookups through `ids` are not affected.
+
+If no paper contains every term, the first page (`start=0`) is relaxed in steps:
+
+1. Drop the last term and search again with `AND`. This is repeated at most twice and always keeps at least two terms. For example, `vehicle counting YOLO ByteTrack` next tries `all:vehicle AND all:counting AND all:YOLO`, then `all:vehicle AND all:counting`. The first relaxed query with results is used, with `metadata.query_fallback = "dropped_terms"` and the ignored terms in `metadata.dropped_terms`.
+2. If that still finds nothing, all terms are joined with `OR`, and `metadata.query_fallback = "any_term"` is set.
+
+Each fallback adds a warning, and the query actually sent is recorded in `metadata.search_query`. A fallback can add up to three requests, each spaced by arXiv's three-second interval. Put the most important terms first, because trailing terms are dropped first. Any-term results can be much less relevant; use fewer terms or explicit arXiv syntax for precise control. Explicit-syntax queries, single-term queries, and later pages never fall back.
+
+## Timeouts and retries
+
+Requests use `ACADEMIC_RESEARCH_TIMEOUT` (default 30 seconds, clamped to 1–120). Timeouts, connection failures, HTTP 429, and HTTP 5xx are retried up to two times with 1 s and 2 s backoff; other 4xx responses are not retried. The client still waits at least three seconds between live requests. If `export.arxiv.org` cannot be reached, the error suggests checking firewall, ISP, or VPN restrictions, or setting `HTTPS_PROXY`. `academic-research doctor --online` checks reachability with one request.
+
 ## Normalization
 
 The provider maps Atom entries into the shared `Paper` contract and retains:

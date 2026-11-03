@@ -1,7 +1,7 @@
 ---
 name: academic-research-workflow
 description: Use when setting up or using Academic Research Tools for auditable multi-source literature discovery.
-version: 0.2.0
+version: 0.2.1
 ---
 
 # Academic research workflow

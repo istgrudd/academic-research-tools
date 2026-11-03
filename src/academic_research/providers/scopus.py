@@ -11,6 +11,7 @@ from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
 
 from ..models import Author, Paper, SearchResult, utc_now_iso
+from ._http import resolve_timeout
 
 BASE_URL = "https://api.elsevier.com"
 Transport = Callable[[str, dict[str, str], float], tuple[int, dict[str, str], bytes]]
@@ -137,7 +138,7 @@ class ScopusProvider:
         api_key: str,
         *,
         inst_token: str | None = None,
-        timeout: float = 30,
+        timeout: float | None = None,
         transport: Transport | None = None,
         base_url: str = BASE_URL,
     ):
@@ -145,7 +146,7 @@ class ScopusProvider:
             raise ValueError("ELSEVIER_API_KEY is required")
         self.api_key = api_key.strip()
         self.inst_token = str(inst_token or "").strip() or None
-        self.timeout = max(1.0, min(float(timeout), 120.0))
+        self.timeout = resolve_timeout(timeout)
         self.transport = transport or _default_transport
         self.base_url = base_url.rstrip("/")
 
