@@ -20,6 +20,24 @@ academic-research search "computer vision low visibility" \
 
 The MCP-specific `search_arxiv` tool also accepts `ids`, `start`, `sort_by`, and `sort_order`.
 
+## Query translation
+
+arXiv does not treat a plain string as "all of these words". Free-text queries are therefore translated into all-terms field queries:
+
+| Input | Sent as `search_query` |
+|---|---|
+| `vehicle counting YOLO ByteTrack` | `all:vehicle AND all:counting AND all:YOLO AND all:ByteTrack` |
+| `"traffic volume" estimation` | `all:"traffic volume" AND all:estimation` |
+| `ti:yolo AND abs:traffic` | unchanged |
+
+A query is passed through unchanged when it already uses arXiv syntax: a field prefix such as `ti:`, `abs:`, `au:`, `all:`, `cat:`, `co:`, `jr:`, `rn:`, or `id:`; an upper-case `AND`, `OR`, or `ANDNOT`; or parentheses. Quoted phrases stay one term and empty terms are dropped. ID lookups through `ids` are not affected.
+
+If no paper contains every term, the first page (`start=0`) is retried once with the same terms joined by `OR`. The result then carries a warning, `metadata.query_fallback = "any_term"`, and the query actually sent in `metadata.search_query`. Any-term results can be much less relevant. Use fewer terms or explicit arXiv syntax for precise control. Explicit-syntax queries, single-term queries, and later pages never fall back.
+
+## Timeouts and retries
+
+Requests use `ACADEMIC_RESEARCH_TIMEOUT` (default 30 seconds, clamped to 1–120). Timeouts, connection failures, HTTP 429, and HTTP 5xx are retried up to two times with 1 s and 2 s backoff; other 4xx responses are not retried. The client still waits at least three seconds between live requests. If `export.arxiv.org` cannot be reached, the error suggests checking firewall, ISP, or VPN restrictions, or setting `HTTPS_PROXY`. `academic-research doctor --online` checks reachability with one request.
+
 ## Normalization
 
 The provider maps Atom entries into the shared `Paper` contract and retains:

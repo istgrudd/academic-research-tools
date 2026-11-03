@@ -30,6 +30,12 @@ The shared paper model preserves Semantic Scholar's paper ID and available DOI, 
 
 ## Rate limits and content rights
 
-A `429` response is reported as a provider failure; unified search still returns results from successful sources. Retry later or configure a key rather than running an aggressive retry loop.
+Timeouts, connection failures, `429`, and `5xx` responses are retried up to two times with 1 s and 2 s backoff. Other `4xx` responses are not retried. If the request still fails, it is reported as a provider failure, and unified search still returns results from successful sources. For a persistent `429`, retry later or configure a key rather than running an aggressive retry loop.
+
+## Timeouts and network reachability
+
+Requests use `ACADEMIC_RESEARCH_TIMEOUT` (default 30 seconds, clamped to 1–120). Some networks block or silently drop traffic to `api.semanticscholar.org`, which on Windows appears as `WinError 10060`. After the retries, the error states that the host could not be reached from this network and suggests checking firewall, ISP, or VPN restrictions, or setting `HTTPS_PROXY`. Proxy settings from the environment and the operating system are honoured through Python's `urllib`.
+
+Run `academic-research doctor --online` to send one request with a 10-second timeout and see whether Semantic Scholar is reachable. With shared public capacity, that check may report `429` even when the network is fine.
 
 Semantic Scholar aggregates content from third parties. The API's availability does not imply that every abstract or metadata field has the same license. Users must follow the API license and any rights attached to underlying content.

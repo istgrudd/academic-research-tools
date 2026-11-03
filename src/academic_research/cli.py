@@ -96,9 +96,14 @@ def _parser() -> argparse.ArgumentParser:
     )
 
     doctor_parser = subparsers.add_parser(
-        "doctor", help="Run credential-safe offline readiness checks"
+        "doctor", help="Run credential-safe readiness checks (offline unless --online)"
     )
     doctor_parser.add_argument("--json", action="store_true", dest="as_json")
+    doctor_parser.add_argument(
+        "--online",
+        action="store_true",
+        help="Also send one small request (10 s timeout) to each active provider",
+    )
 
     search_parser = subparsers.add_parser(
         "search", help="Search one or more configured scholarly providers"
@@ -196,8 +201,8 @@ def _install(platform: str) -> int:
     return 0
 
 
-def _doctor(as_json: bool) -> int:
-    report = doctor_report(resolver=CredentialResolver())
+def _doctor(as_json: bool, online: bool = False) -> int:
+    report = doctor_report(resolver=CredentialResolver(), online=online)
     if as_json:
         print(_json(report))
     else:
@@ -209,6 +214,15 @@ def _doctor(as_json: bool) -> int:
         print(f"  Path: {credentials['config_path']}")
         if credentials["error"]:
             print(f"  Error: {credentials['error']}")
+        if "online" in report:
+            online_report = report["online"]
+            print()
+            print(f"Online checks (timeout {online_report['timeout_seconds']}s):")
+            for name, check in online_report["providers"].items():
+                if check["reachable"]:
+                    print(f"✓ {name:20} reachable ({check['elapsed_ms']} ms)")
+                else:
+                    print(f"✗ {name:20} {check['error']}")
         print()
         print("Optional: academic-research configure")
     return 0 if report["success"] else 1
@@ -238,7 +252,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _install(args.platform)
 
         if args.command == "doctor":
-            return _doctor(args.as_json)
+            return _doctor(args.as_json, args.online)
 
         if args.command == "serve":
             run_mcp()

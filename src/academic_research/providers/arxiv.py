@@ -9,14 +9,14 @@ import xml.etree.ElementTree as ET
 from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import Any
-from urllib.error import HTTPError, URLError
+from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from ..models import Author, Paper, SearchResult
+from ._http import request_with_retries, resolve_timeout, user_agent
 
 BASE_URL = "https://export.arxiv.org/api/query"
-USER_AGENT = "academic-research-tools/0.1 (+https://github.com/OWNER/academic-research-tools)"
 Transport = Callable[[str, dict[str, str], float], tuple[int, dict[str, str], bytes]]
 
 _ATOM = "http://www.w3.org/2005/Atom"
@@ -25,6 +25,39 @@ _ARXIV = "http://arxiv.org/schemas/atom"
 NS = {"atom": _ATOM, "open": _OPEN, "arxiv": _ARXIV}
 _THROTTLE_LOCK = threading.Lock()
 _LAST_REQUEST = 0.0
+
+# Field prefixes, boolean operators, and grouping from the arXiv API query syntax.
+_SYNTAX_PATTERN = re.compile(
+    r"\b(?:ti|au|abs|co|jr|cat|rn|id|all|submittedDate|lastUpdatedDate):"
+    r"|\b(?:AND|OR|ANDNOT)\b"
+    r"|[()]"
+)
+_TERM_PATTERN = re.compile(r'"([^"]*)"|(\S+)')
+
+
+def _plain_terms(query: str) -> list[str] | None:
+    """Split a free-text query into arXiv terms, or return None for arXiv syntax."""
+    if _SYNTAX_PATTERN.search(query):
+        return None
+    terms: list[str] = []
+    for phrase, word in _TERM_PATTERN.findall(query):
+        if phrase:
+            phrase = " ".join(phrase.split())
+            if phrase:
+                terms.append(f'all:"{phrase}"')
+        else:
+            word = word.strip('"')
+            if word:
+                terms.append(f"all:{word}")
+    return terms
+
+
+def _build_arxiv_query(query: str, operator: str = "AND") -> str:
+    """Translate free text into an all-terms arXiv query; keep explicit syntax as is."""
+    terms = _plain_terms(query)
+    if not terms:
+        return query
+    return f" {operator} ".join(terms)
 
 
 class ArxivAPIError(RuntimeError):
@@ -50,8 +83,6 @@ def _default_transport(
                 result = response.status, dict(response.headers.items()), response.read()
         except HTTPError as exc:
             result = exc.code, dict(exc.headers.items()) if exc.headers else {}, exc.read()
-        except (URLError, TimeoutError) as exc:
-            raise ArxivAPIError(f"Network error while calling arXiv API: {exc}") from exc
         finally:
             _LAST_REQUEST = time.monotonic()
         return result
@@ -87,13 +118,38 @@ class ArxivProvider:
     def __init__(
         self,
         *,
-        timeout: float = 30,
+        timeout: float | None = None,
         transport: Transport | None = None,
         base_url: str = BASE_URL,
+        max_retries: int = 2,
     ):
-        self.timeout = max(1.0, min(float(timeout), 120.0))
+        self.timeout = resolve_timeout(timeout)
         self.transport = transport or _default_transport
         self.base_url = base_url
+        self.max_retries = max(0, int(max_retries))
+
+    def _fetch(self, params: dict[str, Any]) -> ET.Element:
+        url = self.base_url + "?" + urlencode(
+            {key: value for key, value in params.items() if value is not None}
+        )
+        status, _, body = request_with_retries(
+            self.transport,
+            url,
+            {"Accept": "application/atom+xml", "User-Agent": user_agent()},
+            self.timeout,
+            max_retries=self.max_retries,
+            service="arXiv API",
+            host="export.arxiv.org",
+            error_type=ArxivAPIError,
+        )
+        if status >= 400:
+            raise ArxivAPIError(f"arXiv API returned HTTP {status}", status_code=status)
+        try:
+            return ET.fromstring(body)
+        except ET.ParseError as exc:
+            raise ArxivAPIError(
+                "arXiv returned malformed Atom XML", status_code=status
+            ) from exc
 
     def search(
         self,
@@ -121,30 +177,34 @@ class ArxivProvider:
         if sort_order not in {"ascending", "descending"}:
             raise ValueError("sort_order must be ascending or descending")
 
+        terms = _plain_terms(query) if query else None
+        search_query = " AND ".join(terms) if terms else query
         params = {
-            "search_query": query,
+            "search_query": search_query,
             "id_list": ",".join(normalized_ids) or None,
             "start": start,
             "max_results": limit,
             "sortBy": sort_by,
             "sortOrder": sort_order,
         }
-        url = self.base_url + "?" + urlencode(
-            {key: value for key, value in params.items() if value is not None}
-        )
-        status, _, body = self.transport(
-            url,
-            {"Accept": "application/atom+xml", "User-Agent": USER_AGENT},
-            self.timeout,
-        )
-        if status >= 400:
-            raise ArxivAPIError(f"arXiv API returned HTTP {status}", status_code=status)
-        try:
-            root = ET.fromstring(body)
-        except ET.ParseError as exc:
-            raise ArxivAPIError(
-                "arXiv returned malformed Atom XML", status_code=status
-            ) from exc
+        root = self._fetch(params)
+        warnings: list[str] = []
+        extra_metadata: dict[str, Any] = {}
+        if (
+            terms
+            and len(terms) > 1
+            and start == 0
+            and _int(_text(root, "open:totalResults")) == 0
+        ):
+            # No paper matched every term; retry once with any-term matching.
+            search_query = " OR ".join(terms)
+            root = self._fetch({**params, "search_query": search_query})
+            extra_metadata["query_fallback"] = "any_term"
+            warnings.append(
+                "arXiv found no papers containing all query terms; results match any "
+                "term (OR) and may be less relevant. Use arXiv syntax such as ti:, abs:, "
+                "or AND/OR for precise control."
+            )
 
         papers: list[Paper] = []
         retrieved_at = datetime.now(timezone.utc).isoformat()
@@ -214,5 +274,6 @@ class ArxivProvider:
             papers=papers,
             authenticated=False,
             attribution="Thank you to arXiv for use of its open access interoperability.",
-            metadata={"ids": normalized_ids},
+            warnings=warnings,
+            metadata={"ids": normalized_ids, "search_query": search_query, **extra_metadata},
         )

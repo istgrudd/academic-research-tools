@@ -8,11 +8,12 @@ import threading
 import time
 from collections.abc import Callable
 from typing import Any
-from urllib.error import HTTPError, URLError
+from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from ..models import Author, Paper, SearchResult, utc_now_iso
+from ._http import request_with_retries, resolve_timeout, user_agent
 
 BASE_URL = "https://api.semanticscholar.org/graph/v1"
 FIELDS = ",".join(
@@ -64,10 +65,6 @@ def _default_transport(
                 result = response.status, dict(response.headers.items()), response.read()
         except HTTPError as exc:
             result = exc.code, dict(exc.headers.items()) if exc.headers else {}, exc.read()
-        except (URLError, TimeoutError) as exc:
-            raise SemanticScholarAPIError(
-                f"Network error while calling Semantic Scholar API: {exc}"
-            ) from exc
         finally:
             _LAST_REQUEST = time.monotonic()
         return result
@@ -95,14 +92,16 @@ class SemanticScholarProvider:
         self,
         api_key: str | None = None,
         *,
-        timeout: float = 30,
+        timeout: float | None = None,
         transport: Transport | None = None,
         base_url: str = BASE_URL,
+        max_retries: int = 2,
     ):
         self.api_key = str(api_key or "").strip() or None
-        self.timeout = max(1.0, min(float(timeout), 120.0))
+        self.timeout = resolve_timeout(timeout)
         self.transport = transport or _default_transport
         self.base_url = base_url.rstrip("/")
+        self.max_retries = max(0, int(max_retries))
 
     def search(
         self,
@@ -133,11 +132,20 @@ class SemanticScholarProvider:
         )
         headers = {
             "Accept": "application/json",
-            "User-Agent": "Academic-Research-Tools/0.1",
+            "User-Agent": user_agent(),
         }
         if self.api_key:
             headers["x-api-key"] = self.api_key
-        status, _, body = self.transport(url, headers, self.timeout)
+        status, _, body = request_with_retries(
+            self.transport,
+            url,
+            headers,
+            self.timeout,
+            max_retries=self.max_retries,
+            service="Semantic Scholar API",
+            host="api.semanticscholar.org",
+            error_type=SemanticScholarAPIError,
+        )
         try:
             payload = json.loads(body.decode("utf-8", errors="replace")) if body else {}
         except json.JSONDecodeError as exc:

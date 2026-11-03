@@ -10,6 +10,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from ..models import Author, Paper, SearchResult, utc_now_iso
+from ._http import resolve_timeout
 
 SERPAPI_URL = "https://serpapi.com/search.json"
 Transport = Callable[[str, dict[str, str], float], tuple[int, dict[str, str], bytes]]
@@ -50,14 +51,14 @@ class SerpAPIScholarProvider:
         self,
         api_key: str,
         *,
-        timeout: float = 30,
+        timeout: float | None = None,
         transport: Transport | None = None,
         base_url: str = SERPAPI_URL,
     ):
         if not str(api_key or "").strip():
             raise ValueError("SERPAPI_API_KEY is required for Google Scholar search")
         self.api_key = api_key.strip()
-        self.timeout = max(1.0, min(float(timeout), 120.0))
+        self.timeout = resolve_timeout(timeout)
         self.transport = transport or _default_transport
         self.base_url = base_url
 

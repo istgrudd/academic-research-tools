@@ -29,7 +29,8 @@ The package remains useful without credentials: arXiv is available immediately a
 - Automation-friendly CLI and direct Python API
 - Thin native Hermes Agent adapter
 - Protected local credential configuration with environment overrides
-- Interactive hidden-input credential wizard and offline diagnostics
+- Interactive hidden-input credential wizard, offline diagnostics, and opt-in online reachability checks
+- Bounded retries for transient network, rate-limit, and server errors on arXiv and Semantic Scholar
 - One-command Claude Code and Codex MCP plus skill installation
 - Progressive onboarding that never blocks the first keyless search
 - No telemetry
@@ -83,6 +84,27 @@ academic-research install --platform codex
 The installer does not launch credential configuration. arXiv and Semantic Scholar public access remain ready for immediate use.
 
 See [Getting started](docs/getting-started.md) and [Credential setup](docs/credentials.md).
+
+## Diagnostics and network
+
+`academic-research doctor` is offline: it checks the credential configuration and provider availability without contacting any provider.
+
+To check whether each active provider is reachable from the current network, add `--online`:
+
+```bash
+academic-research doctor --online
+academic-research doctor --online --json
+```
+
+Each active provider receives exactly one small search request with a 10-second timeout and no retries. The result is shown as `✓`/`✗` with a reason, and the JSON report gains an `online` section. Credential values are never printed. The command exits non-zero when any check fails. Each check is a real request and counts against that provider's quota; for SerpAPI it uses one search credit.
+
+| Environment variable | Purpose |
+|---|---|
+| `ACADEMIC_RESEARCH_TIMEOUT` | Request timeout in seconds for every provider. Default `30`, clamped to `1`–`120`; invalid values fall back to the default. |
+| `HTTPS_PROXY` / `HTTP_PROXY` | Standard proxy variables, honoured through Python's `urllib` together with the operating system proxy settings. |
+| `ACADEMIC_RESEARCH_CONFIG_DIR` | Alternative directory for the protected `credentials.json`. |
+
+arXiv and Semantic Scholar retry timeouts, connection failures, HTTP 429, and HTTP 5xx up to two times, waiting 1 s and then 2 s. Other 4xx responses are returned immediately. If a host stays unreachable, the error states that it could not be reached from this network; check firewall, ISP, or VPN restrictions, or set `HTTPS_PROXY`.
 
 ## MCP quick start
 

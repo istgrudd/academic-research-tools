@@ -213,6 +213,9 @@ class ResearchService:
         warnings = [
             "Citation counts are provider-specific and must not be compared directly."
         ]
+        warnings.extend(
+            f"{source}: {warning}" for source in succeeded for warning in pages[source].warnings
+        )
         if failed:
             warnings.append(
                 "Some providers failed; results are partial: " + ", ".join(failed)
